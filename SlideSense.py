@@ -58,49 +58,52 @@ if pdf is not None:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         splitted_text = text_splitter.split_text(text)
 
-        # Clean chunks (remove empty or None)
+        # Clean and validate chunks
         splitted_text = [chunk for chunk in splitted_text if isinstance(chunk, str) and chunk.strip()]
 
-        # Embeddings with safe max_length
-        embeddings = HuggingFaceEmbeddings(
-            model_name='sentence-transformers/all-MiniLM-L6-v2',
-            encode_kwargs={'max_length': 512}
-        )
-
-        # Create vector DB
-        vector_db = FAISS.from_texts(splitted_text, embeddings)
-
-    st.markdown("""
-    <div class="success-notification">
-        <p class="success-text">✅ Document processed successfully and ready for queries</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Query section
-    st.markdown("""
-    <div class="query-section">
-        <h3>Ask intelligent questions about your document</h3>
-    </div>
-    """, unsafe_allow_html=True)
-
-    user_query = st.text_input("Ask a question", placeholder="Enter your question...")
-
-    if user_query:
-        with st.spinner('🤖 Generating intelligent response...'):
-            docs = vector_db.similarity_search(user_query)
-            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-            prompt = ChatPromptTemplate.from_template(
-                "Answer the following:\n{context}\nQuestion: {question}\nRead the context carefully and then answer it"
+        if not splitted_text:
+            st.error("No valid text extracted from the PDF. Try another document or use OCR for scanned PDFs.")
+            vector_db = None
+        else:
+            # Embeddings with safe max_length and truncation
+            embeddings = HuggingFaceEmbeddings(
+                model_name='sentence-transformers/all-MiniLM-L6-v2',
+                encode_kwargs={'max_length': 512, 'truncation': True}
             )
-            chain = create_stuff_documents_chain(llm, prompt)
-            response = chain.invoke({"context": docs, "question": user_query})
+            vector_db = FAISS.from_texts(splitted_text, embeddings)
 
-        st.markdown(f"""
-        <div class="response-section">
-            <h3 class="response-title">Response</h3>
-            <div class="response-content">{response}</div>
+    if vector_db:
+        st.markdown("""
+        <div class="success-notification">
+            <p class="success-text">✅ Document processed successfully and ready for queries</p>
         </div>
         """, unsafe_allow_html=True)
+
+        # Query section
+        st.markdown("""
+        <div class="query-section">
+            <h3>Ask intelligent questions about your document</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        user_query = st.text_input("Ask a question", placeholder="Enter your question...")
+
+        if user_query:
+            with st.spinner('🤖 Generating intelligent response...'):
+                docs = vector_db.similarity_search(user_query)
+                llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+                prompt = ChatPromptTemplate.from_template(
+                    "Answer the following:\n{context}\nQuestion: {question}\nRead the context carefully and then answer it"
+                )
+                chain = create_stuff_documents_chain(llm, prompt)
+                response = chain.invoke({"context": docs, "question": user_query})
+
+            st.markdown(f"""
+            <div class="response-section">
+                <h3 class="response-title">Response</h3>
+                <div class="response-content">{response}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 else:
     st.info("📘 Upload a PDF document above to unlock AI-powered analysis.")
