@@ -5,13 +5,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
-import httpx
 
 # Page configuration
 st.set_page_config(
-    page_title="SlideSense PDF Analyser", 
-    page_icon="📘", 
+    page_title="SlideSense PDF Analyser",
+    page_icon="📘",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -35,6 +35,11 @@ st.markdown("""
     .response-header { display: flex; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; }
     .response-title { font-size: 1.25rem; font-weight: 600; color: #f8fafc; margin: 0; }
     .response-content { color: #e2e8f0; font-size: 1.1rem; line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; }
+    .success-notification { background: rgba(34,197,94,0.2); border-radius: 12px; padding: 1rem; margin-top: 1rem; }
+    .success-text { color: #22c55e; font-weight: 600; }
+    .instruction-container { background: rgba(30,41,59,0.6); border-radius: 12px; padding: 2rem; margin-top: 2rem; }
+    .instruction-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #60a5fa; }
+    .instruction-text { font-size: 1.1rem; color: #e2e8f0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,19 +60,16 @@ if pdf is not None:
         pdf_reader = PdfReader(pdf)
         text = ""
         for page in pdf_reader.pages:
-            text += page.extract_text() + "\n\n"
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n\n"
 
         # Split text into chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         splitted_text = text_splitter.split_text(text)
 
-        # Set a longer timeout for Hugging Face model
-        client = httpx.Client(timeout=httpx.Timeout(30.0))  # 30 seconds timeout
-
-        embeddings = HuggingFaceEmbeddings(
-            model_name='sentence-transformers/all-MiniLM-L6-v2',
-            client=client  # pass client here
-        )
+        # Embeddings
+        embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
 
         # Create vector DB
         vector_db = FAISS.from_texts(splitted_text, embeddings)
@@ -88,7 +90,7 @@ if pdf is not None:
     """, unsafe_allow_html=True)
 
     user_query = st.text_input(
-        "Ask a question",  # Non-empty label
+        "Ask a question",
         placeholder="Enter your question about the document...",
         help="Type your question here",
         label_visibility="collapsed"
@@ -98,11 +100,13 @@ if pdf is not None:
         with st.spinner('🤖 Generating intelligent response...'):
             docs = vector_db.similarity_search(user_query)
             llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-            prompt = ChatPromptTemplate.from_template("Answer the following:\n{context}\nQuestion: {question}\n Read the context carefully and then answer it")
-            chain = create_stuff_documents_chain(llm, prompt)  
+            prompt = ChatPromptTemplate.from_template(
+                "Answer the following:\n{context}\nQuestion: {question}\nRead the context carefully and then answer it"
+            )
+            chain = create_stuff_documents_chain(llm, prompt)
             response = chain.invoke({"context": docs, "question": user_query})
 
-        # Display response with enhanced formatting
+        # Display response
         st.markdown(f"""
         <div class="response-section">
             <div class="response-header">
