@@ -8,10 +8,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 
-# OCR imports
-from pdf2image import convert_from_bytes
-import pytesseract
-
 st.set_page_config(page_title="SlideSense PDF Analyser", page_icon="📘", layout="wide")
 load_dotenv()
 
@@ -21,29 +17,27 @@ pdf = st.file_uploader("Upload a PDF document", type="pdf")
 
 if pdf is not None:
     with st.spinner("Processing your document..."):
-        text = ""
-
-        # Try normal text extraction first
         pdf_reader = PdfReader(pdf)
+        text = ""
         for page in pdf_reader.pages:
             page_text = page.extract_text()
             if page_text:
                 text += page_text + "\n\n"
 
-        # If no text found, fallback to OCR
-        if not text.strip():
-            st.warning("No text detected with PyPDF2. Using OCR fallback...")
-            images = convert_from_bytes(pdf.read())
-            for img in images:
-                text += pytesseract.image_to_string(img) + "\n\n"
-
         # Split text into chunks
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         splitted_text = text_splitter.split_text(text)
+
+        # Clean and validate chunks
         splitted_text = [chunk for chunk in splitted_text if isinstance(chunk, str) and chunk.strip()]
 
+        # Debug printout
+        st.write("Number of chunks:", len(splitted_text))
+        if splitted_text:
+            st.write("First chunk sample:", splitted_text[0][:300])
+
         if not splitted_text:
-            st.error("❌ No valid text could be extracted from the PDF.")
+            st.error("❌ No valid text extracted from the PDF. Try another document or use OCR for scanned PDFs.")
             vector_db = None
         else:
             embeddings = HuggingFaceEmbeddings(
