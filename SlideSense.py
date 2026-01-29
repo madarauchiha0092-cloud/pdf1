@@ -18,28 +18,19 @@ st.set_page_config(
 
 load_dotenv()
 
-# Ultra-smooth dark blue & black themed CSS
+# Custom CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    .stApp { background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%); background-attachment: fixed; font-family: 'Inter', sans-serif; color: #ffffff; min-height: 100vh; }
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} .stDeployButton {visibility: hidden;}
-    * { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-    .main .block-container { padding: 2rem; max-width: 1400px; margin: 0 auto; }
-    .hero-section { text-align: center; padding: 5rem 2rem; margin-bottom: 3rem; background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.1) 0%, transparent 70%); border-radius: 24px; position: relative; overflow: hidden; }
-    .hero-title { font-size: 4.2rem !important; font-weight: 800; letter-spacing: 2px; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 40%, #1e40af 100%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1.5rem; }
-    .glass-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(20px); border-radius: 20px; padding: 2.5rem; margin-bottom: 2rem; }
-    .query-section { background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%); backdrop-filter: blur(20px); border-radius: 20px; padding: 2.5rem; position: relative; overflow: hidden; margin: 2rem 0; }
-    .response-section { background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%); backdrop-filter: blur(25px); border-radius: 20px; padding: 2.5rem; margin: 2rem 0; position: relative; }
-    .response-header { display: flex; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; }
-    .response-title { font-size: 1.25rem; font-weight: 600; color: #f8fafc; margin: 0; }
-    .response-content { color: #e2e8f0; font-size: 1.1rem; line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; }
+    .stApp { background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%); color: #ffffff; }
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    .hero-section { text-align: center; padding: 3rem; margin-bottom: 2rem; }
+    .hero-title { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #1e40af); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .success-notification { background: rgba(34,197,94,0.2); border-radius: 12px; padding: 1rem; margin-top: 1rem; }
     .success-text { color: #22c55e; font-weight: 600; }
-    .instruction-container { background: rgba(30,41,59,0.6); border-radius: 12px; padding: 2rem; margin-top: 2rem; }
-    .instruction-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #60a5fa; }
-    .instruction-text { font-size: 1.1rem; color: #e2e8f0; }
+    .query-section { background: rgba(30,41,59,0.6); border-radius: 12px; padding: 2rem; margin-top: 2rem; }
+    .response-section { background: rgba(30,41,59,0.8); border-radius: 12px; padding: 2rem; margin-top: 2rem; }
+    .response-title { font-size: 1.25rem; font-weight: 600; color: #f8fafc; }
+    .response-content { color: #e2e8f0; font-size: 1.1rem; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -47,15 +38,14 @@ st.markdown("""
 st.markdown("""
 <div class="hero-section">
     <h1 class="hero-title">SlideSense PDF Analyser</h1>
-    <p class="hero-subtitle">Advanced Document Analysis with AI Technology</p>
+    <p>Advanced Document Analysis with AI Technology</p>
 </div>
 """, unsafe_allow_html=True)
 
 # File uploader
-pdf = st.file_uploader("Document Upload", type="pdf", help="Choose a PDF document for analysis")
+pdf = st.file_uploader("Upload a PDF document", type="pdf")
 
 if pdf is not None:
-    # Process PDF
     with st.spinner('Processing your document...'):
         pdf_reader = PdfReader(pdf)
         text = ""
@@ -68,13 +58,18 @@ if pdf is not None:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=80)
         splitted_text = text_splitter.split_text(text)
 
-        # Embeddings
-        embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+        # Clean chunks (remove empty or None)
+        splitted_text = [chunk for chunk in splitted_text if isinstance(chunk, str) and chunk.strip()]
+
+        # Embeddings with safe max_length
+        embeddings = HuggingFaceEmbeddings(
+            model_name='sentence-transformers/all-MiniLM-L6-v2',
+            encode_kwargs={'max_length': 512}
+        )
 
         # Create vector DB
         vector_db = FAISS.from_texts(splitted_text, embeddings)
 
-    # Success message
     st.markdown("""
     <div class="success-notification">
         <p class="success-text">✅ Document processed successfully and ready for queries</p>
@@ -84,17 +79,11 @@ if pdf is not None:
     # Query section
     st.markdown("""
     <div class="query-section">
-        <div class="section-title">Query Interface</div>
-        <div class="section-subtitle">Ask intelligent questions about your document</div>
+        <h3>Ask intelligent questions about your document</h3>
     </div>
     """, unsafe_allow_html=True)
 
-    user_query = st.text_input(
-        "Ask a question",
-        placeholder="Enter your question about the document...",
-        help="Type your question here",
-        label_visibility="collapsed"
-    )
+    user_query = st.text_input("Ask a question", placeholder="Enter your question...")
 
     if user_query:
         with st.spinner('🤖 Generating intelligent response...'):
@@ -106,25 +95,12 @@ if pdf is not None:
             chain = create_stuff_documents_chain(llm, prompt)
             response = chain.invoke({"context": docs, "question": user_query})
 
-        # Display response
         st.markdown(f"""
         <div class="response-section">
-            <div class="response-header">
-                <span class="response-icon">🤖</span>
-                <h3 class="response-title">Response</h3>
-            </div>
+            <h3 class="response-title">Response</h3>
             <div class="response-content">{response}</div>
         </div>
         """, unsafe_allow_html=True)
 
 else:
-    # Instructions
-    st.markdown("""
-    <div class="instruction-container">
-        <div class="instruction-title">Get Started</div>
-        <div class="instruction-text">
-            Upload your PDF document above to unlock the power of AI-driven document analysis. 
-            Ask questions, extract insights, and discover information with intelligent search capabilities.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("📘 Upload a PDF document above to unlock AI-powered analysis.")
