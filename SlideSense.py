@@ -15,7 +15,7 @@ from langchain.prompts import ChatPromptTemplate
 import google.generativeai as genai
 
 
-# -------------------- CONFIG --------------------
+# -------------------- APP CONFIG --------------------
 st.set_page_config(
     page_title="SlideSense PDF Analyser",
     page_icon="📘",
@@ -31,7 +31,7 @@ if not GOOGLE_API_KEY:
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-# Fix asyncio loop issue
+# Fix asyncio loop issue (important for Streamlit)
 try:
     asyncio.get_running_loop()
 except RuntimeError:
@@ -64,15 +64,19 @@ pdf = st.file_uploader("Upload PDF Document", type="pdf")
 if pdf:
     with st.spinner("📄 Processing PDF..."):
         reader = PdfReader(pdf)
-        text = ""
+        full_text = ""
+
         for page in reader.pages:
-            text += page.extract_text() + "\n"
+            extracted = page.extract_text()
+            if extracted:
+                full_text += extracted + "\n"
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=80
         )
-        chunks = splitter.split_text(text)
+
+        chunks = splitter.split_text(full_text)
 
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -100,12 +104,11 @@ if pdf:
 
             chain = create_stuff_documents_chain(llm, prompt)
 
-            result = chain.invoke({
+            # ✅ FIXED: chain returns STRING, not dict
+            answer = chain.invoke({
                 "context": docs,
                 "question": user_query
             })
-
-            answer = result.get("output_text", "")
 
         st.markdown("### 🤖 Answer")
         st.write(answer)
